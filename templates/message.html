@@ -1,2 +1,2 @@
 {% import time %}
-<div class="message" id="m{{ message["id"] }}">[{{ time.strftime('%H:%M:%S') }}] <b>{{ message["from"] }}: </b>{% module linkify(message["body"]) %}</div>
+<div class="message" id="m{{ message["id"] }}"><span class="time">[{{ time.strftime('%H:%M:%S') }}]</span> <b>{{ message["from"] }}:</b> <span class="body">{% module linkify(message["body"]) %}</span></div>
