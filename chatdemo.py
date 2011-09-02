@@ -104,7 +104,6 @@ class MessageMixin(object):
     if len(cls.cache) > self.cache_size:
       cls.cache = cls.cache[-self.cache_size:]
 
-
 class MessageNewHandler(BaseHandler, MessageMixin):
   @tornado.web.authenticated
   def post(self):
