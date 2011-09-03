@@ -51,8 +51,12 @@ td {
 }
 
 #nav {
-  float: right;
   z-index: 99;
+  position: fixed;
+  top: 0;
+  right: 0.2em;
+  background: white;
+  padding: 0.2em;
 }
 
 #source-link {
