@@ -122,7 +122,10 @@ class MessageUpdatesHandler(BaseHandler, MessageMixin):
   def on_new_messages(self, messages):
     # Closed client connection
     if self.request.connection.stream.closed():
-      online_users.remove(self.current_user)
+      try:
+        online_users.remove(self.current_user)
+      except KeyError:
+        pass
       return
     self.finish(dict(messages=messages))
 
