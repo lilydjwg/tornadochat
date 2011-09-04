@@ -28,18 +28,7 @@ from tornado.options import define, options
 
 define("port", default=8888, help="run on the given port", type=int)
 
-def isascii(string):
-  for i in string:
-    if ord(i) > 255:
-      return False
-  return True
-
-def formatname(user):
-  zhfull = user["last_name"] + user["first_name"]
-  if isascii(zhfull):
-    return user['name']
-  else:
-    return zhfull
+online_users = set()
 
 class Application(tornado.web.Application):
   def __init__(self):
@@ -63,15 +52,20 @@ class Application(tornado.web.Application):
 
 class BaseHandler(tornado.web.RequestHandler):
   def get_current_user(self):
-    user_json = self.get_secure_cookie("user")
-    if not user_json: return None
-    return tornado.escape.json_decode(user_json)
+    user = tornado.escape.to_unicode(self.get_secure_cookie("user"))
+    if not user:
+      return None
+    return user
+
+  def initialize(self):
+    if self.current_user:
+      online_users.add(self.current_user)
 
 class MainHandler(BaseHandler):
   @tornado.web.authenticated
   def get(self):
     self.render("index.html", messages=MessageMixin.cache,
-                name=formatname(self.current_user))
+                name=self.current_user)
 
 class MessageMixin(object):
   waiters = []
@@ -94,6 +88,7 @@ class MessageMixin(object):
   def new_messages(self, messages):
     cls = MessageMixin
     logging.info("Sending new message to %r listeners", len(cls.waiters))
+    logging.info("online users: %s, sender %s", online_users, self.current_user)
     for callback in cls.waiters:
       try:
         callback(messages)
@@ -109,14 +104,11 @@ class MessageNewHandler(BaseHandler, MessageMixin):
   def post(self):
     message = {
       "id": str(uuid.uuid4()),
-      "from": formatname(self.current_user),
+      "from": self.current_user,
       "body": self.get_argument("body"),
     }
     message["html"] = self.render_string("message.html", message=message)
-    if self.get_argument("next", None):
-      self.redirect(self.get_argument("next"))
-    else:
-      self.write(message)
+    self.write(message)
     self.new_messages([message])
 
 class MessageUpdatesHandler(BaseHandler, MessageMixin):
@@ -130,28 +122,29 @@ class MessageUpdatesHandler(BaseHandler, MessageMixin):
   def on_new_messages(self, messages):
     # Closed client connection
     if self.request.connection.stream.closed():
+      online_users.remove(self.current_user)
       return
     self.finish(dict(messages=messages))
 
-
-class AuthLoginHandler(BaseHandler, tornado.auth.GoogleMixin):
+class AuthLoginHandler(BaseHandler):
   @tornado.web.asynchronous
   def get(self):
-    if self.get_argument("openid.mode", None):
-      self.get_authenticated_user(self.async_callback(self._on_auth))
-      return
-    self.authenticate_redirect(ax_attrs=["name"])
+    self.render("login.html")
 
-  def _on_auth(self, user):
+  def post(self):
+    user = self.get_argument("nickname", None)
     if not user:
-      raise tornado.web.HTTPError(500, "Google auth failed")
-    self.set_secure_cookie("user", tornado.escape.json_encode(user))
-    self.redirect("/")
+      self.render("login.html")
+    elif user in online_users:
+      self.render("login.html", error="昵称已被使用")
+    else:
+      self.set_secure_cookie("user", user)
+      self.redirect(self.get_argument("next", "/"))
 
 class AuthLogoutHandler(BaseHandler):
   def get(self):
     self.clear_cookie("user")
-    self.write("You are now logged out")
+    self.render("logout.html")
 
 def main():
   tornado.options.parse_command_line()

@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<title>{{ _("Login") }}</title>
+{% try %}
+<strong>{{ error and _("This nick has been used by someone else.") }}</strong>
+{% except NameError %}
+{% end %}
+<form method="post">
+  {{ _("Nick") }}: <input name="nickname" autofocus /> <input type="submit"/>
+  {% module xsrf_form_html() %}
+</form>
+<!-- vim: set fdm=marker: -->
