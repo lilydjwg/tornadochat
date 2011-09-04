@@ -57,6 +57,8 @@ $(document).ready(function() {
 });
 
 function newMessage(form) {
+  if(/^\s*$/.test(form.find('[name=body]').val()))
+    return false;
   var message = form.formToDict();
   var disabled = form.find("input[type=submit]");
   disabled.disable();
