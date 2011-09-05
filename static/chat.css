@@ -27,6 +27,7 @@ body {
   background-color: white;
   position: fixed;
   bottom: 0;
+  height: 1.75em;
 }
 
 #inbox > .message {
