@@ -23,12 +23,20 @@ import tornado.options
 import tornado.web
 import os.path
 import uuid
+import hashlib
+from functools import lru_cache
 
 from tornado.options import define, options
 
 define("port", default=8888, help="run on the given port", type=int)
 
 online_users = set()
+
+@lru_cache()
+def md5sum(s):
+  m = hashlib.md5()
+  m.update(s.encode('utf-8'))
+  return m.hexdigest()
 
 class Application(tornado.web.Application):
   def __init__(self):
@@ -40,7 +48,7 @@ class Application(tornado.web.Application):
       (r"/a/message/updates", MessageUpdatesHandler),
     ]
     settings = dict(
-      cookie_secret="43oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
+      cookie_secret="43oETzKXQAGaY9kL5gnmGeJJFuYh7EQnp2XdTP1o/Vo=",
       login_url="/auth/login",
       template_path=os.path.join(os.path.dirname(__file__), "templates"),
       static_path=os.path.join(os.path.dirname(__file__), "static"),
@@ -52,20 +60,21 @@ class Application(tornado.web.Application):
 
 class BaseHandler(tornado.web.RequestHandler):
   def get_current_user(self):
-    user = tornado.escape.to_unicode(self.get_secure_cookie("user"))
+    user = self.get_secure_cookie("user")
     if not user:
       return None
-    return user
+    return tornado.escape.json_decode(user)
 
   def initialize(self):
     if self.current_user:
-      online_users.add(self.current_user)
+      online_users.add(self.current_user['nick'])
 
 class MainHandler(BaseHandler):
   @tornado.web.authenticated
   def get(self):
     self.render("index.html", messages=MessageMixin.cache,
-                name=self.current_user)
+                name=self.current_user['nick'],
+                avatar='http://www.gravatar.com/avatar/%s.png?size=18' % md5sum(self.current_user['email']))
 
 class MessageMixin(object):
   waiters = []
@@ -88,7 +97,7 @@ class MessageMixin(object):
   def new_messages(self, messages):
     cls = MessageMixin
     logging.info("Sending new message to %r listeners", len(cls.waiters))
-    logging.info("online users: %s, sender %s", online_users, self.current_user)
+    logging.info("online users: %s, sender %s", online_users, self.current_user['nick'])
     for callback in cls.waiters:
       try:
         callback(messages)
@@ -104,9 +113,11 @@ class MessageNewHandler(BaseHandler, MessageMixin):
   def post(self):
     message = {
       "id": str(uuid.uuid4()),
-      "from": self.current_user,
+      "from": self.current_user['nick'],
       "body": self.get_argument("body"),
     }
+    message["avatar"] = 'http://www.gravatar.com/avatar/%s.png' % md5sum(self.current_user['email'])
+    message["avatar_small"] = message["avatar"] + '?size=18'
     message["html"] = self.render_string("message.html", message=message)
     self.write(message)
     self.new_messages([message])
@@ -123,7 +134,7 @@ class MessageUpdatesHandler(BaseHandler, MessageMixin):
     # Closed client connection
     if self.request.connection.stream.closed():
       try:
-        online_users.remove(self.current_user)
+        online_users.remove(self.current_user['nick'])
       except KeyError:
         pass
       return
@@ -135,19 +146,24 @@ class AuthLoginHandler(BaseHandler):
     self.render("login.html")
 
   def post(self):
-    user = self.get_argument("nickname", None)
-    if not user:
+    nick = self.get_argument("nick", None)
+    email = self.get_argument("email", '')
+    if not nick:
       self.render("login.html")
-    elif user in online_users:
+    elif nick in online_users:
       self.render("login.html", error="昵称已被使用")
     else:
-      self.set_secure_cookie("user", user)
+      user = {
+        'nick': nick,
+        'email': email,
+      }
+      self.set_secure_cookie("user", tornado.escape.json_encode(user))
       self.redirect(self.get_argument("next", "/"))
 
 class AuthLogoutHandler(BaseHandler):
   def get(self):
     try:
-      online_users.remove(self.current_user)
+      online_users.remove(self.current_user['nick'])
     except KeyError:
       pass
     self.clear_cookie("user")

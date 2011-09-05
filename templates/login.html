@@ -6,7 +6,9 @@
 {% except NameError %}
 {% end %}
 <form method="post">
-  {{ _("Nick") }}: <input name="nickname" autofocus /> <input type="submit"/>
+  {{ _("Nick") }}: <input name="nick" autofocus /><br/>
+  {{ _("Email (optional)") }}: <input name="email" /><br/>
+  <input type="submit"/>
   {% module xsrf_form_html() %}
 </form>
 <!-- vim: set fdm=marker: -->

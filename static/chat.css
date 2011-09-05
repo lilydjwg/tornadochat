@@ -16,6 +16,7 @@
 
 body {
   margin: 10px;
+  font-size: 16px;
 }
 
 #inbox {
@@ -32,6 +33,10 @@ body {
 
 #inbox > .message {
   padding-top: 0.25em;
+}
+
+img {
+  vertical-align: text-top;
 }
 
 #nav {
