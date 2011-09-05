@@ -146,6 +146,10 @@ class AuthLoginHandler(BaseHandler):
 
 class AuthLogoutHandler(BaseHandler):
   def get(self):
+    try:
+      online_users.remove(self.current_user)
+    except KeyError:
+      pass
     self.clear_cookie("user")
     self.render("logout.html")
 
