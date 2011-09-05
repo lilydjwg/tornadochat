@@ -18,7 +18,7 @@ body {
   margin: 10px;
 }
 
-#body {
+#inbox {
   margin-bottom: 2em;
 }
 
@@ -27,7 +27,7 @@ body {
   background-color: white;
   position: fixed;
   bottom: 0;
-  height: 1.75em;
+  height: 1.5em;
 }
 
 #inbox > .message {
