@@ -118,6 +118,7 @@ class MessageNewHandler(BaseHandler, MessageMixin):
     }
     message["avatar"] = 'http://www.gravatar.com/avatar/%s.png' % md5sum(self.current_user['email'])
     message["avatar_small"] = message["avatar"] + '?size=18'
+    message["avatar"] = message["avatar"] + '?size=512'
     message["html"] = self.render_string("message.html", message=message)
     self.write(message)
     self.new_messages([message])
