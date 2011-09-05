@@ -14,11 +14,22 @@
 
 var info;
 
-var updateTitle = function() {
+var updateTitle = function(){
   if(info.unread){
     document.title = '('+info.unread+') ' + info.originalTitle;
   }else{
     document.title = info.originalTitle;
+  }
+};
+
+var scrollWindow = function(){
+  var maxy = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+  if(maxy != window.scrollY){
+    amount = (maxy - window.scrollY) / 5;
+    if(amount < 5)
+      amount = 5;
+    window.scrollBy(0, amount);
+    setTimeout(arguments.callee, 15, false);
   }
 };
 
@@ -52,8 +63,8 @@ $(document).ready(function() {
       return false;
     }
   });
-  $("#message").select();
   updater.poll();
+  scrollWindow();
 });
 
 function newMessage(form) {
@@ -67,7 +78,7 @@ function newMessage(form) {
     if (message.id) {
       form.parent().remove();
     } else {
-      form.find("input[type=text]").val("").select();
+      form.find("input[type=text]").val("").focus();
       disabled.enable();
     }
   });
@@ -160,8 +171,7 @@ var updater = {
     var existing = $("#m" + message.id);
     if (existing.length > 0) return;
     var node = $(message.html);
-    node.hide();
     $("#inbox").append(node);
-    node.slideDown();
+    scrollWindow();
   }
 };
