@@ -37,6 +37,7 @@ body {
 
 img {
   vertical-align: text-top;
+  border: 0;
 }
 
 #nav {
