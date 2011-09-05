@@ -71,7 +71,7 @@ function newMessage(form) {
   if(/^\s*$/.test(form.find('[name=body]').val()))
     return false;
   var message = form.formToDict();
-  var disabled = form.find("input[type=submit]");
+  var disabled = form.find("input");
   disabled.disable();
   $.postJSON("/a/message/new", message, function(response) {
     updater.showMessage(response);
