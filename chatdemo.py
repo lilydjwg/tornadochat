@@ -74,7 +74,7 @@ class MainHandler(BaseHandler):
   def get(self):
     self.render("index.html", messages=MessageMixin.cache,
                 name=self.current_user['nick'],
-                avatar='http://www.gravatar.com/avatar/%s.png?size=18' % md5sum(self.current_user['email']))
+                avatar='https://secure.gravatar.com/avatar/%s.png?size=18' % md5sum(self.current_user['email']))
 
 class MessageMixin(object):
   waiters = []
@@ -116,7 +116,7 @@ class MessageNewHandler(BaseHandler, MessageMixin):
       "from": self.current_user['nick'],
       "body": self.get_argument("body"),
     }
-    message["avatar"] = 'http://www.gravatar.com/avatar/%s.png' % md5sum(self.current_user['email'])
+    message["avatar"] = 'https://secure.gravatar.com/avatar/%s.png' % md5sum(self.current_user['email'])
     message["avatar_small"] = message["avatar"] + '?size=18'
     message["avatar"] = message["avatar"] + '?size=512'
     message["html"] = self.render_string("message.html", message=message)
