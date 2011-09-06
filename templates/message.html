@@ -1,7 +1,7 @@
 {% import time %}
 <div class="message" id="m{{ message["id"] }}">
   <span class="time">[{{ time.strftime('%H:%M:%S') }}]</span>
-  <a href="{{ message["avatar"] }}" title="{{ _("view larger avatar") }}"><img src="{{ message["avatar_small"] }}"/></a>
+  <a href="{{ message["avatar"] }}" title="{{ _("view larger avatar") }}" target="_blank"><img src="{{ message["avatar_small"] }}"/></a>
   <b>{{ message["from"] }}:</b>
   <span class="body">{% module linkify(message["body"], extra_params='target="_blank"') %}</span>
 </div>
