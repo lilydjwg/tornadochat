@@ -62,6 +62,7 @@ class MessageUpdate(threading.Thread):
     res = submit_form(form, open_http=self.session.http_open)
     html = res.read().decode('utf-8')
     doc = fromstring(html, base_url=res.geturl())
+    return doc
 
   def run(self):
     while True:
