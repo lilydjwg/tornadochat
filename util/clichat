@@ -11,8 +11,8 @@ from urllib.parse import urlencode, urljoin
 from httpsession import Session
 from lxml.html import fromstring, submit_form
 
-#CHAT_URL = 'https://edisonnotes.com:8888/'
-CHAT_URL = 'https://localhost:8888/'
+# CHAT_URL = 'https://localhost:8888/'
+CHAT_URL = 'https://edisonnotes.com:8888/'
 COOKIE_FILE = os.path.join(os.path.split(os.path.realpath(__file__))[0], 'cookie')
 PROMPT = '>> '
 
@@ -103,6 +103,7 @@ class MessageUpdate(threading.Thread):
 def main():
   t = MessageUpdate(CHAT_URL)
   t.start()
+  print(t.nick, 'login successful!')
   try:
     while True:
       msg = input(PROMPT)
