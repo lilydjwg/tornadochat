@@ -16,6 +16,8 @@ CHAT_URL = 'https://edisonnotes.com:8888/'
 COOKIE_FILE = os.path.join(os.path.split(os.path.realpath(__file__))[0], 'cookie')
 PROMPT = '>> '
 
+display_lock = threading.Lock()
+
 def format_msg(msg):
   return '[%(time)s] %(from)s: %(body)s' % msg
 
@@ -87,11 +89,12 @@ class MessageUpdate(threading.Thread):
       if m['from'] != self.nick:
         todisplay.append(format_msg(m))
     if todisplay:
-      print('\r\x1b[K', end='')
-      for i in todisplay:
-        print(i)
-      print(PROMPT, readline.get_line_buffer(), sep='', end='')
-      sys.stdout.flush()
+      with display_lock:
+        print('\r\x1b[K', end='')
+        for i in todisplay:
+          print(i)
+        print(PROMPT, readline.get_line_buffer(), sep='', end='')
+        sys.stdout.flush()
     self.lastid = m['id']
 
   def send_message(self, msgbody):
@@ -109,7 +112,8 @@ def main():
     while True:
       msg = input(PROMPT)
       if msg:
-        t.send_message(msg)
+        with display_lock:
+          t.send_message(msg)
   except (EOFError, KeyboardInterrupt):
     print()
 
