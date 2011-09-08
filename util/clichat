@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # vim:fileencoding=utf-8
 
+import os
 import sys
 import readline
 import threading
@@ -12,7 +13,7 @@ from lxml.html import fromstring, submit_form
 
 #CHAT_URL = 'https://edisonnotes.com:8888/'
 CHAT_URL = 'https://localhost:8888/'
-COOKIE_FILE = 'cookie'
+COOKIE_FILE = os.path.join(os.path.split(os.path.realpath(__file__))[0], 'cookie')
 PROMPT = '>> '
 
 def format_msg(msg):
@@ -32,7 +33,7 @@ class Myhttpopen(Session):
       url += urlencode(values)
       data = None
     else:
-      data = urlencode(values)
+      data = dict(values)
     return self.request(url, data)
 
 class MessageUpdate(threading.Thread):
@@ -43,8 +44,9 @@ class MessageUpdate(threading.Thread):
     self.baseurl = baseurl
     self.updateurl = urljoin(self.baseurl, '/a/message/updates')
     self.sendurl = urljoin(self.baseurl, '/a/message/new')
-    html = self.session.request(baseurl).read().decode('utf-8')
-    doc = fromstring(html)
+    res = self.session.request(baseurl)
+    html = res.read().decode('utf-8')
+    doc = fromstring(html, base_url=res.geturl())
     while doc.cssselect('title')[0].text.lower().find('login') != -1:
       doc = self.login(doc)
     form = doc.forms[0]
@@ -57,8 +59,9 @@ class MessageUpdate(threading.Thread):
     form = doc.forms[0]
     form.fields['nick'] = input('nick: ')
     form.fields['email'] = input('email (optional): ')
-    html = submit_form(form, open_http=self.session.http_open).read().decode('utf-8')
-    return fromstring(html)
+    res = submit_form(form, open_http=self.session.http_open)
+    html = res.read().decode('utf-8')
+    doc = fromstring(html, base_url=res.geturl())
 
   def run(self):
     while True:
@@ -86,7 +89,7 @@ class MessageUpdate(threading.Thread):
       print('\r\x1b[K', end='')
       for i in todisplay:
         print(i)
-      print(PROMPT, readline.get_line_buffer(), end='')
+      print(PROMPT, readline.get_line_buffer(), sep='', end='')
       sys.stdout.flush()
     self.lastid = m['id']
 
