@@ -14,6 +14,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import urllib.parse
 import logging
 import time
 import tornado.auth
@@ -73,6 +74,9 @@ class BaseHandler(tornado.web.RequestHandler):
       online_users[self.current_user['nick']] = {
         'timeout': time.time() + 2 * POLL_TIME
       }
+
+  def redirect(self, url, permanent=False):
+    super().redirect(urllib.parse.urljoin(self.request.full_url(), url), permanent)
 
 class MainHandler(BaseHandler):
   @tornado.web.authenticated
