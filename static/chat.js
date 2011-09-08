@@ -76,7 +76,9 @@ var updater = {
   },
 
   onError: function(response) {
-    updater.errorSleepTime *= 2;
+    if(updater.errorSleepTime < 60000){
+      updater.errorSleepTime *= 2;
+    }
     console.log("Poll error; sleeping for", updater.errorSleepTime, "ms");
     window.setTimeout(updater.poll, updater.errorSleepTime);
   },
