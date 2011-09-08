@@ -3,9 +3,11 @@
 
 import os
 import sys
+import time
 import readline
 import threading
 import json
+import urllib.error
 from urllib.parse import urlencode, urljoin
 
 from httpsession import Session
@@ -68,17 +70,22 @@ class MessageUpdate(threading.Thread):
 
   def run(self):
     while True:
-      res = self.session.request(self.updateurl, {
-        '_xsrf': self.xsrf,
-        'cursor': self.lastid,
-      })
-      j = json.loads(res.read().decode('utf-8'))
-      if j['status'] == 'ok':
-        self.on_message(j['messages'])
-      elif j['status'] == 'try again':
-        continue
-      else:
-        self.on_error(j)
+      try:
+        res = self.session.request(self.updateurl, {
+          '_xsrf': self.xsrf,
+          'cursor': self.lastid,
+        })
+        j = json.loads(res.read().decode('utf-8'))
+        if j['status'] == 'ok':
+          self.on_message(j['messages'])
+        elif j['status'] == 'try again':
+          continue
+        else:
+          self.on_error(j)
+      except:
+        import traceback
+        traceback.print_exc()
+        time.sleep(3)
 
   def on_error(self, msg):
     print('error:', msg, file=sys.stderr)
