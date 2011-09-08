@@ -128,8 +128,7 @@ class MessageUpdatesHandler(BaseHandler, MessageMixin):
   @tornado.web.asynchronous
   def post(self):
     cursor = self.get_argument("cursor", None)
-    self.wait_for_messages(self.async_callback(self.on_new_messages),
-                 cursor=cursor)
+    self.wait_for_messages(self.on_new_messages, cursor=cursor)
 
   def on_new_messages(self, messages):
     # Closed client connection
