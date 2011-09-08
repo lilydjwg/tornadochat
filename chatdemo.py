@@ -15,6 +15,7 @@
 # under the License.
 
 import logging
+import time
 import tornado.auth
 import tornado.escape
 import tornado.ioloop
@@ -24,13 +25,14 @@ import tornado.web
 import os.path
 import uuid
 import hashlib
-from functools import lru_cache
+from functools import lru_cache, partial
 
 from tornado.options import define, options
 
 define("port", default=8888, help="run on the given port", type=int)
 
-online_users = set()
+online_users = {}
+POLL_TIME = 120 # seconds
 
 @lru_cache()
 def md5sum(s):
@@ -67,7 +69,10 @@ class BaseHandler(tornado.web.RequestHandler):
 
   def initialize(self):
     if self.current_user:
-      online_users.add(self.current_user['nick'])
+      # new user
+      online_users[self.current_user['nick']] = {
+        'timeout': time.time() + 2 * POLL_TIME
+      }
 
 class MainHandler(BaseHandler):
   @tornado.web.authenticated
@@ -97,7 +102,7 @@ class MessageMixin(object):
   def new_messages(self, messages):
     cls = MessageMixin
     logging.info("Sending new message to %r listeners", len(cls.waiters))
-    logging.info("online users: %s, sender %s", online_users, self.current_user['nick'])
+    logging.info("online users: %s, sender %s", tuple(online_users.keys()), self.current_user['nick'])
     for callback in cls.waiters:
       try:
         callback(messages)
@@ -129,16 +134,32 @@ class MessageUpdatesHandler(BaseHandler, MessageMixin):
   def post(self):
     cursor = self.get_argument("cursor", None)
     self.wait_for_messages(self.on_new_messages, cursor=cursor)
+    ioloop.add_timeout(time.time() + POLL_TIME,
+                       partial(self.timedout, self.on_new_messages))
+
+  def timedout(self, callback):
+    if not (self._finished or self.request.connection.stream.closed()):
+      try:
+        MessageMixin.waiters.remove(callback)
+      except ValueError:
+        logging.warn('timedout request callback not in waiters: %s, %r',
+                     self.current_user, callback)
+      self.finish(dict(status='try again'))
+      online_users[self.current_user['nick']]['timeout'] = time.time() + 2 * POLL_TIME
 
   def on_new_messages(self, messages):
     # Closed client connection
     if self.request.connection.stream.closed():
       try:
-        online_users.remove(self.current_user['nick'])
+        del online_users[self.current_user['nick']]
       except KeyError:
         pass
       return
-    self.finish(dict(messages=messages))
+    self.finish(dict(messages=messages, status='ok'))
+    try:
+      online_users[self.current_user['nick']]['timeout'] = time.time() + 2 * POLL_TIME
+    except KeyError:
+      logging.warn("user %s login wasn't be caught", self.current_user)
 
 class AuthLoginHandler(BaseHandler):
   @tornado.web.asynchronous
@@ -163,11 +184,17 @@ class AuthLoginHandler(BaseHandler):
 class AuthLogoutHandler(BaseHandler):
   def get(self):
     try:
-      online_users.remove(self.current_user['nick'])
+      del online_users[self.current_user['nick']]
     except KeyError:
       pass
     self.clear_cookie("user")
     self.render("logout.html")
+
+def checkOnlineUsers():
+  now = time.time()
+  for k, v in online_users.copy().items():
+    if v['timeout'] < now:
+      del online_users[k]
 
 def main():
   tornado.options.parse_command_line()
@@ -177,7 +204,10 @@ def main():
     "keyfile": os.path.expanduser("~/etc/key/server.key"),
   })
   http_server.listen(options.port)
-  tornado.ioloop.IOLoop.instance().start()
+  global ioloop
+  ioloop = tornado.ioloop.IOLoop.instance()
+  tornado.ioloop.PeriodicCallback(checkOnlineUsers, POLL_TIME * 100).start()
+  ioloop.start()
 
 if __name__ == "__main__":
   try:

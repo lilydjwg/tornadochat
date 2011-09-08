@@ -26,16 +26,111 @@ var scrollWindow = function(){
   var maxy = document.documentElement.scrollHeight - document.documentElement.clientHeight;
   if(maxy != window.scrollY){
     amount = (maxy - window.scrollY) / 5;
-    if(amount < 5)
+    if(amount < 5){
       amount = 5;
+    }
     window.scrollBy(0, amount);
     setTimeout(arguments.callee, 15, false);
   }
 };
 
+var getCookie = function(name){
+  var r = document.cookie.match("\\b" + name + "=([^;]*)\\b");
+  return r ? r[1] : undefined;
+}
+
+var updater = {
+  errorSleepTime: 500,
+  cursor: null,
+
+  poll: function() {
+    var args = {"_xsrf": getCookie("_xsrf")};
+    if(updater.cursor){
+      args.cursor = updater.cursor;
+    }
+    $.ajax({
+      url: "/a/message/updates",
+      type: "POST",
+      dataType: "json",
+      data: $.param(args),
+      error: updater.onError
+    }).success(function(data){
+      try{
+	if(data.status == 'ok'){
+	  updater.newMessages(data);
+	  updater.errorSleepTime = 500;
+	  window.setTimeout(updater.poll, 0);
+	}else if(data.status == 'try again'){
+	  updater.errorSleepTime = 500;
+	  window.setTimeout(updater.poll, 0);
+	}else{
+	  console.warning('bad response', data);
+	  updater.onError();
+	}
+      }catch(e){
+	console.error(e);
+	updater.onError();
+	return;
+      }
+    });
+  },
+
+  onError: function(response) {
+    updater.errorSleepTime *= 2;
+    console.log("Poll error; sleeping for", updater.errorSleepTime, "ms");
+    window.setTimeout(updater.poll, updater.errorSleepTime);
+  },
+
+  newMessages: function(response) {
+    if(!response.messages){
+      return;
+    }
+    updater.cursor = response.cursor;
+    var messages = response.messages;
+    updater.cursor = messages[messages.length - 1].id;
+    console.log(messages.length, "new messages, cursor:", updater.cursor);
+    for(var i = 0; i < messages.length; i++) {
+      updater.showMessage(messages[i]);
+    }
+    if(info.focus === false){
+      info.unread += messages.length;
+      updateTitle();
+    }
+  },
+
+  showMessage: function(message) {
+    var existing = $("#m" + message.id);
+    if(existing.length > 0){
+      return;
+    }
+    var node = $(message.html);
+    $("#inbox").append(node);
+    scrollWindow();
+  }
+};
+
+
+var newMessage = function(form){
+  if(/^\s*$/.test(form.find('[name=body]').val())){
+    return false;
+  }
+  var message = form.formToDict();
+  var disabled = form.find("input");
+  disabled.disable();
+  $.postJSON("/a/message/new", message, function(response) {
+    updater.showMessage(response);
+    form.find("input[type=text]").val("").focus();
+    disabled.enable();
+  });
+};
+
 $(document).ready(function() {
-  if (!window.console) window.console = {};
-  if (!window.console.log) window.console.log = function() {};
+  if(!window.console){
+    window.console = {};
+    window.console.log = function() {};
+    window.console.warning = function() {};
+    window.console.error = function() {};
+  }
 
   info = {
     originalTitle: document.title,
@@ -67,45 +162,32 @@ $(document).ready(function() {
   scrollWindow();
 });
 
-function newMessage(form) {
-  if(/^\s*$/.test(form.find('[name=body]').val()))
-    return false;
-  var message = form.formToDict();
-  var disabled = form.find("input");
-  disabled.disable();
-  $.postJSON("/a/message/new", message, function(response) {
-    updater.showMessage(response);
-    if (message.id) {
-      form.parent().remove();
-    } else {
-      form.find("input[type=text]").val("").focus();
-      disabled.enable();
-    }
-  });
-}
-
-function getCookie(name) {
-  var r = document.cookie.match("\\b" + name + "=([^;]*)\\b");
-  return r ? r[1] : undefined;
-}
-
 jQuery.postJSON = function(url, args, callback) {
   args._xsrf = getCookie("_xsrf");
-  $.ajax({url: url, data: $.param(args), dataType: "text", type: "POST",
-	 success: function(response) {
-	   if (callback) callback(eval("(" + response + ")"));
-	 }, error: function(response) {
-	   console.log("ERROR:", response)
-	 }});
+  $.ajax({
+    url: url,
+    data: $.param(args),
+    dataType: "json",
+    type: "POST",
+    success: function(response) {
+      if(callback){
+	callback(response);
+      }
+    }, error: function(response) {
+      console.log("ERROR:", response);
+    }
+  });
 };
 
 jQuery.fn.formToDict = function() {
   var fields = this.serializeArray();
-  var json = {}
+  var json = {};
   for (var i = 0; i < fields.length; i++) {
     json[fields[i].name] = fields[i].value;
   }
-  if (json.next) delete json.next;
+  if(json.next){
+    delete json.next;
+  }
   return json;
 };
 
@@ -123,55 +205,3 @@ jQuery.fn.enable = function(opt_enable) {
   return this;
 };
 
-var updater = {
-  errorSleepTime: 500,
-  cursor: null,
-
-  poll: function() {
-    var args = {"_xsrf": getCookie("_xsrf")};
-    if (updater.cursor) args.cursor = updater.cursor;
-    $.ajax({url: "/a/message/updates", type: "POST", dataType: "text",
-	   data: $.param(args), success: updater.onSuccess,
-	   error: updater.onError});
-  },
-
-  onSuccess: function(response) {
-    try {
-      updater.newMessages(eval("(" + response + ")"));
-    } catch (e) {
-      updater.onError();
-      return;
-    }
-    updater.errorSleepTime = 500;
-    window.setTimeout(updater.poll, 0);
-  },
-
-  onError: function(response) {
-    updater.errorSleepTime *= 2;
-    console.log("Poll error; sleeping for", updater.errorSleepTime, "ms");
-    window.setTimeout(updater.poll, updater.errorSleepTime);
-  },
-
-  newMessages: function(response) {
-    if (!response.messages) return;
-    updater.cursor = response.cursor;
-    var messages = response.messages;
-    updater.cursor = messages[messages.length - 1].id;
-    console.log(messages.length, "new messages, cursor:", updater.cursor);
-    for(var i = 0; i < messages.length; i++) {
-      updater.showMessage(messages[i]);
-    }
-    if(info.focus === false){
-      info.unread += messages.length;
-      updateTitle();
-    }
-  },
-
-  showMessage: function(message) {
-    var existing = $("#m" + message.id);
-    if (existing.length > 0) return;
-    var node = $(message.html);
-    $("#inbox").append(node);
-    scrollWindow();
-  }
-};
