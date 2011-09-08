@@ -123,7 +123,7 @@ class MessageNewHandler(BaseHandler, MessageMixin):
     message = {
       "id": str(uuid.uuid4()),
       "from": self.current_user['nick'],
-      "body": self.get_argument("body").replace(' ', ' '),
+      "body": self.get_argument("body", strip=False).replace(' ', ' '),
       "time": time.strftime('%H:%M:%S'),
     }
     message["avatar"] = 'https://secure.gravatar.com/avatar/%s' % md5sum(self.current_user['email'])
