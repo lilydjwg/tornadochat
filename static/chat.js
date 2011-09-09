@@ -65,7 +65,7 @@ var updater = {
     updater.clearinfo = setTimeout(function(){
       updater.errorSleepTime = 500;
       showinfo(false);
-    }, 3000, false);
+    }, Math.min(3000, updater.errorSleepTime), false);
 
     $.ajax({
       url: "/a/message/updates",
