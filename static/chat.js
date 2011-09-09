@@ -14,6 +14,19 @@
 
 var info;
 
+var showinfo = function(what){
+  var $info = $('#info');
+  if(typeof what == "string"){
+    $info.text(what).css({
+      left: ((document.body.clientWidth - $info.outerWidth()) / 2) + 'px'
+    }).slideDown();
+  }else{
+    if(!what){
+      $info.slideUp();
+    }
+  }
+};
+
 var updateTitle = function(){
   if(info.unread){
     document.title = '('+info.unread+') ' + info.originalTitle;
@@ -42,12 +55,18 @@ var getCookie = function(name){
 var updater = {
   errorSleepTime: 500,
   cursor: null,
+  clearinfo: 0,
 
   poll: function() {
     var args = {"_xsrf": getCookie("_xsrf")};
     if(updater.cursor){
       args.cursor = updater.cursor;
     }
+    updater.clearinfo = setTimeout(function(){
+      updater.errorSleepTime = 500;
+      showinfo(false);
+    }, 3000, false);
+
     $.ajax({
       url: "/a/message/updates",
       type: "POST",
@@ -58,10 +77,8 @@ var updater = {
       try{
 	if(data.status == 'ok'){
 	  updater.newMessages(data);
-	  updater.errorSleepTime = 500;
 	  window.setTimeout(updater.poll, 0);
 	}else if(data.status == 'try again'){
-	  updater.errorSleepTime = 500;
 	  window.setTimeout(updater.poll, 0);
 	}else{
 	  console.warning('bad response', data);
@@ -79,7 +96,8 @@ var updater = {
     if(updater.errorSleepTime < 60000){
       updater.errorSleepTime *= 2;
     }
-    console.log("Poll error; sleeping for", updater.errorSleepTime, "ms");
+    clearTimeout(updater.clearinfo);
+    showinfo("network error; try again in " + (updater.errorSleepTime / 1000) +  "s");
     window.setTimeout(updater.poll, updater.errorSleepTime);
   },
 
