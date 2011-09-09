@@ -86,7 +86,7 @@ class MainHandler(BaseHandler):
                 avatar='https://secure.gravatar.com/avatar/%s?size=18' % md5sum(self.current_user['email']))
 
 class MessageMixin(object):
-  waiters = []
+  waiters = set()
   cache = []
   cache_size = 200
 
@@ -101,7 +101,11 @@ class MessageMixin(object):
       if recent:
         callback(recent)
         return
-    cls.waiters.append(callback)
+    cls.waiters.add(callback)
+
+  def cancel_wait(self, callback):
+    cls = MessageMixin
+    cls.waiters.remove(callback)
 
   def new_messages(self, messages):
     cls = MessageMixin
@@ -112,7 +116,7 @@ class MessageMixin(object):
         callback(messages)
       except:
         logging.error("Error in waiter callback", exc_info=True)
-    cls.waiters = []
+    cls.waiters = set()
     cls.cache.extend(messages)
     if len(cls.cache) > self.cache_size:
       cls.cache = cls.cache[-self.cache_size:]
@@ -165,6 +169,9 @@ class MessageUpdatesHandler(BaseHandler, MessageMixin):
       online_users[self.current_user['nick']]['timeout'] = time.time() + 2 * POLL_TIME
     except KeyError:
       logging.warn("user %s login wasn't be caught", self.current_user)
+
+  def on_connection_close(self):
+    self.cancel_wait(self.on_new_messages)
 
 class AuthLoginHandler(BaseHandler):
   @tornado.web.asynchronous
