@@ -14,6 +14,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import re
 import urllib.parse
 import logging
 import time
@@ -33,13 +34,15 @@ from tornado.options import define, options
 define("port", default=8888, help="run on the given port", type=int)
 
 online_users = {}
-POLL_TIME = 120 # seconds
+POLL_TIME = 120  # seconds
+
 
 @lru_cache()
 def md5sum(s):
   m = hashlib.md5()
   m.update(s.encode('utf-8'))
   return m.hexdigest()
+
 
 class Application(tornado.web.Application):
   def __init__(self):
@@ -61,6 +64,7 @@ class Application(tornado.web.Application):
     )
     tornado.web.Application.__init__(self, handlers, **settings)
 
+
 class BaseHandler(tornado.web.RequestHandler):
   def get_current_user(self):
     user = self.get_secure_cookie("user")
@@ -76,14 +80,18 @@ class BaseHandler(tornado.web.RequestHandler):
       }
 
   def redirect(self, url, permanent=False):
-    super().redirect(urllib.parse.urljoin(self.request.full_url(), url), permanent)
+    super().redirect(urllib.parse.urljoin(self.request.full_url(), url),
+                     permanent)
+
 
 class MainHandler(BaseHandler):
   @tornado.web.authenticated
   def get(self):
+    avatar = 'https://secure.gravatar.com/avatar/%s?size=18' % \
+        md5sum(self.current_user['email'])
     self.render("index.html", messages=MessageMixin.cache,
-                name=self.current_user['nick'],
-                avatar='https://secure.gravatar.com/avatar/%s?size=18' % md5sum(self.current_user['email']))
+                name=self.current_user['nick'], avatar=avatar)
+
 
 class MessageMixin(object):
   waiters = set()
@@ -96,7 +104,8 @@ class MessageMixin(object):
       index = 0
       for i in range(len(cls.cache)):
         index = len(cls.cache) - i - 1
-        if cls.cache[index]["id"] == cursor: break
+        if cls.cache[index]["id"] == cursor:
+          break
       recent = cls.cache[index + 1:]
       if recent:
         callback(recent)
@@ -107,10 +116,11 @@ class MessageMixin(object):
     cls = MessageMixin
     cls.waiters.remove(callback)
 
-  def new_messages(self, messages):
+  def broadcasting(self, messages):
     cls = MessageMixin
     logging.info("Sending new message to %r listeners", len(cls.waiters))
-    logging.info("online users: %s, sender %s", tuple(online_users.keys()), self.current_user['nick'])
+    logging.info("online users: %s, sender %s",
+                 tuple(online_users.keys()), self.current_user['nick'])
     for callback in cls.waiters:
       try:
         callback(messages)
@@ -121,21 +131,68 @@ class MessageMixin(object):
     if len(cls.cache) > self.cache_size:
       cls.cache = cls.cache[-self.cache_size:]
 
-class MessageNewHandler(BaseHandler, MessageMixin):
-  @tornado.web.authenticated
-  def post(self):
+
+class CommandMixin:
+  def unknown(self, message, cmd):
+    'Respond to an unknown command'
+    message["body"] = '未知命令: %s' % cmd
+    message["html"] = self.render_string("notification.html", message=message)
+    self.write(message)
+
+  def handle(self):
     message = {
       "id": str(uuid.uuid4()),
       "from": self.current_user['nick'],
       "body": self.get_argument("body", strip=False).replace(' ', ' '),
       "time": time.strftime('%H:%M:%S'),
     }
-    message["avatar"] = 'https://secure.gravatar.com/avatar/%s' % md5sum(self.current_user['email'])
+
+    message["avatar"] = 'https://secure.gravatar.com/avatar/%s' % \
+        md5sum(self.current_user['email'])
+
     message["avatar_small"] = message["avatar"] + '?size=18'
     message["avatar"] = message["avatar"] + '?size=512'
+
+    re_cmd = re.compile(r'^\s*/(.+)')
+    cmd = re_cmd.findall(message["body"])
+    if len(cmd):
+      cmd = cmd[0].strip()
+    else:
+      cmd = 'say'
+    try:
+      if cmd != 'say':
+        message["from"] = "系统"
+        message["avatar"] = '/static/logo.jpg'
+
+      command = getattr(self, 'do_' + cmd, None)
+      command(message)
+    except TypeError:
+      self.unknown(message, cmd)
+
+  def do_say(self, message):
     message["html"] = self.render_string("message.html", message=message)
     self.write(message)
-    self.new_messages([message])
+    self.broadcasting([message])
+
+  def do_online(self, message):
+    users = online_users.keys()
+    message["body"] = "%d 人在线：" % len(users) + ', '.join(users)
+    message["html"] = self.render_string("notification.html", message=message)
+    self.write(message)
+
+  def do_logout(self, message):
+    try:
+      del online_users[self.current_user['nick']]
+      self.clear_cookie("user")
+    except KeyError:
+      pass
+
+
+class MessageNewHandler(BaseHandler, MessageMixin, CommandMixin):
+  @tornado.web.authenticated
+  def post(self):
+    self.handle()
+
 
 class MessageUpdatesHandler(BaseHandler, MessageMixin):
   @tornado.web.authenticated
@@ -154,7 +211,8 @@ class MessageUpdatesHandler(BaseHandler, MessageMixin):
         logging.warn('timedout request callback not in waiters: %s, %r',
                      self.current_user, callback)
       self.finish(dict(status='try again'))
-      online_users[self.current_user['nick']]['timeout'] = time.time() + 2 * POLL_TIME
+      online_users[self.current_user['nick']]['timeout'] = time.time() + \
+          2 * POLL_TIME
 
   def on_new_messages(self, messages):
     # Closed client connection
@@ -166,12 +224,14 @@ class MessageUpdatesHandler(BaseHandler, MessageMixin):
       return
     self.finish(dict(messages=messages, status='ok'))
     try:
-      online_users[self.current_user['nick']]['timeout'] = time.time() + 2 * POLL_TIME
+      online_users[self.current_user['nick']]['timeout'] = time.time() + \
+          2 * POLL_TIME
     except KeyError:
       logging.warn("user %s login wasn't be caught", self.current_user)
 
   def on_connection_close(self):
     self.cancel_wait(self.on_new_messages)
+
 
 class AuthLoginHandler(BaseHandler):
   @tornado.web.asynchronous
@@ -190,17 +250,20 @@ class AuthLoginHandler(BaseHandler):
         'nick': nick,
         'email': email,
       }
-      self.set_secure_cookie("user", tornado.escape.json_encode(user), expires_days=1)
+      self.set_secure_cookie("user", tornado.escape.json_encode(user),
+                             expires_days=1)
       self.redirect(self.get_argument("next", "/"))
+
 
 class AuthLogoutHandler(BaseHandler):
   def get(self):
     try:
       del online_users[self.current_user['nick']]
-    except KeyError:
+    except (KeyError, TypeError):
       pass
     self.clear_cookie("user")
     self.render("logout.html")
+
 
 def checkOnlineUsers():
   now = time.time()
@@ -208,13 +271,17 @@ def checkOnlineUsers():
     if v['timeout'] < now:
       del online_users[k]
 
-def main():
+
+def main(ssl=False):
   tornado.options.parse_command_line()
   app = Application()
-  http_server = tornado.httpserver.HTTPServer(app, ssl_options={
-    "certfile": os.path.expanduser("~/etc/key/server.crt"),
-    "keyfile": os.path.expanduser("~/etc/key/server.key"),
-  })
+  if ssl:
+    http_server = tornado.httpserver.HTTPServer(app, ssl_options={
+      "certfile": os.path.expanduser("~/etc/key/server.crt"),
+      "keyfile": os.path.expanduser("~/etc/key/server.key"),
+    })
+  else:
+    http_server = tornado.httpserver.HTTPServer(app)
   http_server.listen(options.port)
   global ioloop
   ioloop = tornado.ioloop.IOLoop.instance()
@@ -223,6 +290,6 @@ def main():
 
 if __name__ == "__main__":
   try:
-    main()
+    main(os.environ.get('SSL', False))
   except KeyboardInterrupt:
     pass
