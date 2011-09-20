@@ -286,6 +286,6 @@ def main(ssl=False):
 
 if __name__ == "__main__":
   try:
-    main()
+    main(os.environ.get('SSL', False))
   except KeyboardInterrupt:
     pass
