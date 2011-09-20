@@ -255,9 +255,7 @@ class AuthLogoutHandler(BaseHandler):
   def get(self):
     try:
       del online_users[self.current_user['nick']]
-    except KeyError:
-      pass
-    except TypeError:
+    except (KeyError, TypeError):
       pass
     self.clear_cookie("user")
     self.render("logout.html")
@@ -278,10 +276,9 @@ def main(ssl=False):
       "certfile": os.path.expanduser("~/etc/key/server.crt"),
       "keyfile": os.path.expanduser("~/etc/key/server.key"),
     })
-    http_server.listen(options.port)
   else:
     http_server = tornado.httpserver.HTTPServer(app)
-    http_server.listen(options.port)
+  http_server.listen(options.port)
   global ioloop
   ioloop = tornado.ioloop.IOLoop.instance()
   tornado.ioloop.PeriodicCallback(checkOnlineUsers, POLL_TIME * 100).start()
