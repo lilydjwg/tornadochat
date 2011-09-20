@@ -1,4 +1,4 @@
-kkA web chatroom using tornado.
+A web chatroom using tornado.
 
 TODO
 ====
