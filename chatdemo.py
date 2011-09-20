@@ -257,6 +257,8 @@ class AuthLogoutHandler(BaseHandler):
       del online_users[self.current_user['nick']]
     except KeyError:
       pass
+    except TypeError:
+      pass
     self.clear_cookie("user")
     self.render("logout.html")
 
