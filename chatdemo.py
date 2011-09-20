@@ -136,7 +136,7 @@ class CommandMixin:
   def unknown(self, message, cmd):
     'Respond to an unknown command'
     message["body"] = '未知命令: %s' % cmd
-    message["html"] = self.render_string("message.html", message=message)
+    message["html"] = self.render_string("notification.html", message=message)
     self.write(message)
 
   def handle(self):
@@ -160,6 +160,10 @@ class CommandMixin:
     else:
       cmd = 'say'
     try:
+      if cmd != 'say':
+        message["from"] = "系统"
+        message["avatar"] = '/static/logo.jpg'
+
       command = getattr(self, 'do_' + cmd, None)
       command(message)
     except TypeError:
@@ -173,7 +177,7 @@ class CommandMixin:
   def do_online(self, message):
     users = online_users.keys()
     message["body"] = "%d 人在线：" % len(users) + ', '.join(users)
-    message["html"] = self.render_string("message.html", message=message)
+    message["html"] = self.render_string("notification.html", message=message)
     self.write(message)
 
   def do_logout(self, message):
