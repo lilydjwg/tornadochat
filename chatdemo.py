@@ -251,7 +251,7 @@ class AuthLoginHandler(BaseHandler):
         'email': email,
       }
       self.set_secure_cookie("user", tornado.escape.json_encode(user),
-                             expires_days=1)
+                             expires_days=30)
       self.redirect(self.get_argument("next", "/"))
 
 
