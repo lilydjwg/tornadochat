@@ -35,8 +35,12 @@ var updateTitle = function(){
   }
 };
 
+var getMaxY = function(){
+  return document.documentElement.scrollHeight - document.documentElement.clientHeight;
+};
+
 var scrollWindow = function(){
-  var maxy = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+  var maxy = getMaxY();
   if(maxy != window.scrollY){
     amount = (maxy - window.scrollY) / 5;
     if(amount < 5){
@@ -50,7 +54,7 @@ var scrollWindow = function(){
 var getCookie = function(name){
   var r = document.cookie.match("\\b" + name + "=([^;]*)\\b");
   return r ? r[1] : undefined;
-}
+};
 
 var updater = {
   errorSleepTime: 500,
@@ -119,13 +123,16 @@ var updater = {
   },
 
   showMessage: function(message) {
+    var shouldScroll = window.scrollY == getMaxY() && window.scrollY !== 0;
     var existing = $("#m" + message.id);
     if(existing.length > 0){
       return;
     }
     var node = $(message.html);
     $("#inbox").append(node);
-    scrollWindow();
+    if(shouldScroll){
+      scrollWindow();
+    }
   }
 };
 
@@ -160,12 +167,23 @@ $(document).ready(function() {
   $(window).bind("blur", function() {
     info.focus = false;
     updateTitle();
+  }).bind('scroll', function() {
+    if(getMaxY() - window.scrollY > 5){
+      info.focus = false;
+      updateTitle();
+    }else{
+      info.focus = true;
+      info.unread = 0;
+      updateTitle();
+    }
   });
 
   $(window).bind("focus", function() {
-    info.focus = true;
-    info.unread = 0;
-    updateTitle();
+    if(getMaxY() - window.scrollY <= 5){
+      info.focus = true;
+      info.unread = 0;
+      updateTitle();
+    }
   });
 
   $("#messageform").live("submit", function() {
