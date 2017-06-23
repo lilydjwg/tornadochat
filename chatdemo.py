@@ -83,6 +83,9 @@ class BaseHandler(tornado.web.RequestHandler):
     super().redirect(urllib.parse.urljoin(self.request.full_url(), url),
                      permanent)
 
+  def render_string(self, *args, **kwargs):
+    ret = super().render_string(*args, **kwargs)
+    return ret.decode('utf-8')
 
 class MainHandler(BaseHandler):
   @tornado.web.authenticated
