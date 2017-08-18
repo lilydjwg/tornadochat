@@ -32,6 +32,7 @@ from functools import lru_cache, partial
 from tornado.options import define, options
 
 define("port", default=8888, help="run on the given port", type=int)
+define("debug", default=False, help="debug mode", type=bool)
 
 online_users = {}
 POLL_TIME = 120  # seconds
@@ -60,7 +61,7 @@ class Application(tornado.web.Application):
       static_path=os.path.join(os.path.dirname(__file__), "static"),
       xsrf_cookies=True,
       autoescape="xhtml_escape",
-      debug=True,
+      debug=options.debug,
     )
     tornado.web.Application.__init__(self, handlers, **settings)
 
