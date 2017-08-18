@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+# vim:fileencoding=utf-8
+
+import os
+import sys
+import time
+import readline
+import threading
+import json
+import urllib.error
+from urllib.parse import urlencode, urljoin
+
+from httpsession import Session
+from lxml.html import fromstring, submit_form
+
+# CHAT_URL = 'https://localhost:8888/'
+CHAT_URL = 'https://edisonnotes.com:8888/'
+COOKIE_FILE = os.path.join(os.path.split(os.path.realpath(__file__))[0], 'cookie')
+PROMPT = '>> '
+
+display_lock = threading.Lock()
+
+def format_msg(msg):
+  return '[%(time)s] %(from)s: %(body)s' % msg
+
+class Myhttpopen(Session):
+  UserAgent = 'Python/%d.%d' % (
+    sys.version_info.major,
+    sys.version_info.minor
+  )
+  def http_open(self, method, url, values):
+    if method == 'GET':
+      if '?' in url:
+        url += '&'
+      else:
+        url += '?'
+      url += urlencode(values)
+      data = None
+    else:
+      data = dict(values)
+    return self.request(url, data)
+
+class MessageUpdate(threading.Thread):
+  daemon = True
+
+  def __init__(self, baseurl):
+    self.session = Myhttpopen(COOKIE_FILE)
+    self.baseurl = baseurl
+    self.updateurl = urljoin(self.baseurl, '/a/message/updates')
+    self.sendurl = urljoin(self.baseurl, '/a/message/new')
+    res = self.session.request(baseurl)
+    html = res.read().decode('utf-8')
+    doc = fromstring(html, base_url=res.geturl())
+    while doc.cssselect('title')[0].text.lower().find('login') != -1:
+      doc = self.login(doc)
+    form = doc.forms[0]
+    self.xsrf = form.fields['_xsrf']
+    self.lastid = ''
+    self.nick = doc.cssselect('#nav > b')[0].text
+    super().__init__()
+
+  def login(self, doc):
+    form = doc.forms[0]
+    form.fields['nick'] = input('nick: ')
+    form.fields['email'] = input('email (optional): ')
+    res = submit_form(form, open_http=self.session.http_open)
+    html = res.read().decode('utf-8')
+    doc = fromstring(html, base_url=res.geturl())
+    return doc
+
+  def run(self):
+    while True:
+      try:
+        res = self.session.request(self.updateurl, {
+          '_xsrf': self.xsrf,
+          'cursor': self.lastid,
+        })
+        j = json.loads(res.read().decode('utf-8'))
+        if j['status'] == 'ok':
+          self.on_message(j['messages'])
+        elif j['status'] == 'try again':
+          continue
+        else:
+          self.on_error(j)
+      except:
+        import traceback
+        traceback.print_exc()
+        time.sleep(3)
+
+  def on_error(self, msg):
+    print('error:', msg, file=sys.stderr)
+
+  def on_message(self, msg):
+    todisplay = []
+    for m in msg:
+      if m['from'] != self.nick:
+        todisplay.append(format_msg(m))
+    if todisplay:
+      with display_lock:
+        print('\r\x1b[K', end='')
+        for i in todisplay:
+          print(i)
+        print(PROMPT, readline.get_line_buffer(), sep='', end='')
+        sys.stdout.flush()
+    self.lastid = m['id']
+
+  def send_message(self, msgbody):
+    res = self.session.request(self.sendurl, {
+      'body': msgbody,
+      '_xsrf': self.xsrf,
+    })
+    res.read()
+
+def main():
+  t = MessageUpdate(CHAT_URL)
+  t.start()
+  print(t.nick, 'login successful!')
+  try:
+    while True:
+      msg = input(PROMPT)
+      if msg:
+        with display_lock:
+          t.send_message(msg)
+  except (EOFError, KeyboardInterrupt):
+    print()
+
+if __name__ == '__main__':
+  main()
