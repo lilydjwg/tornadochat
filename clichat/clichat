@@ -51,12 +51,12 @@ class MessageUpdate(threading.Thread):
     res = self.session.request(baseurl)
     html = res.read().decode('utf-8')
     doc = fromstring(html, base_url=res.geturl())
-    while doc.cssselect('title')[0].text.lower().find('login') != -1:
+    while doc.xpath('//title')[0].text.lower().find('login') != -1:
       doc = self.login(doc)
     form = doc.forms[0]
     self.xsrf = form.fields['_xsrf']
     self.lastid = ''
-    self.nick = doc.cssselect('#nav > b')[0].text
+    self.nick = doc.xpath('//*[@id="nav"]/b')[0].text
     super().__init__()
 
   def login(self, doc):
@@ -100,7 +100,7 @@ class MessageUpdate(threading.Thread):
         print('\r\x1b[K', end='')
         for i in todisplay:
           print(i)
-        print(PROMPT, readline.get_line_buffer(), sep='', end='')
+        print(PROMPT, readline.get_line_buffer(), sep='', end='', flush=True)
         sys.stdout.flush()
     self.lastid = m['id']
 
